@@ -1,0 +1,68 @@
+# Gate-control fields become trusted only after this bootstrap reaches main.
+agent: pi
+allow_repo_commands: false
+commands:
+  test: python3 -m unittest discover -s tests/public -p 'test_*.py' -v
+  lint: python3 tools/check_public_tree.py
+intent:
+  enabled: false
+  disabled_readers: [claude, codex, opencode, rovodev, pi, copilot]
+pr:
+  base_branch: main
+  publish_intent: false
+  appendix: minimal
+providers:
+  github:
+    draft_pull_requests: true
+rebase:
+  strategy: merge
+auto_fix:
+  rebase: 0
+  review: 0
+  test: 0
+  document: 0
+  lint: 0
+  ci: 0
+ci:
+  rerun_transient: 0
+  revalidate_repairs: true
+  rebase_behind: false
+  carry_review_on_replay: false
+  release_after_checks_pass: true
+protected_paths:
+  - LICENSE
+  - .no-mistakes.yaml
+  - .github/**
+  - tools/check_public_tree.py
+  - tests/public/**
+  - kode_implementasi_dan_pengujian/**
+  - docs/skripsi_research_ops/**
+review:
+  path_instructions:
+    - path: '*'
+      instructions: |
+        This is the public governance bootstrap, not the RAG implementation.
+        Review only this tracked worktree. Never open ignored local research
+        documents, evaluation cases/gold/reviews, session transcripts, or the
+        original checkout to obtain test material. Do not change publication
+        exclusions, source baselines, license, tests, or gate policy without
+        explicit operator approval. Report incomplete evidence honestly.
+document:
+  instructions: |
+    Public documentation belongs in README.md and docs/public/GITHUB_WORKFLOW.md.
+    Do not copy private research documentation, questions, gold answers, operator
+    captures, or conversation text into docs, commits, PRs, or evidence.
+    Preserve the existing LICENSE. Do not claim branch protection is active
+    merely because this configuration exists.
+test:
+  instructions: |
+    Product surface in this PR is the publication-check CLI and Git release policy.
+    Use Python stdlib unittest and temporary Git repositories to exercise success
+    and rejected-publication scenarios. Do not run blanket pytest, contact model
+    APIs, launch the medical RAG/UI, import remote inference scripts, SSH to
+    devices, load encoders/FAISS/models, install dependencies, or run benchmarks.
+    This step is not a clinical evaluation or proof of RAG functionality.
+  evidence:
+    store_in_repo: false
+    attach_media: false
+    compact: true

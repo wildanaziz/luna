@@ -1,0 +1,8 @@
+# Preserve exact source/data bytes when those are explicitly released later.
+*.py -text
+*.json -text
+*.jsonl -text
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+LICENSE -text
