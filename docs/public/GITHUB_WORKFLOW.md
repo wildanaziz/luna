@@ -71,6 +71,14 @@ git --version
 The standard `/usr/bin/git` and research environments remain unchanged. This is
 a tested compatible version, not a claim about the oldest supported Git version.
 Restart only the isolated gate daemon after changing its toolchain environment.
+A managed daemon resolves its environment from the login shell: exporting PATH in
+the caller alone did not update the daemon on this machine. The operator's local
+Luna service therefore has its own ZDOTDIR startup wrappers, which source the
+normal user profiles and prepend the dedicated Git directory at the end of login.
+The instance-specific systemd user drop-in exports that ZDOTDIR and NM_HOME.
+Those service files remain local; no existing user shell profiles or other
+no-mistakes instances are changed. Verify the service's effective toolchain, not
+only the version printed by a client-side doctor invocation.
 
 The gate performs review, test, documentation, lint, delivery and CI observation;
 it is not merely a test runner and can generate changes. Disable transcript
