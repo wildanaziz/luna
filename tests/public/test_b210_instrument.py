@@ -22,6 +22,8 @@ if mode=='fail': sys.exit(7)
 if mode=='missing': sys.exit(0)
 if mode=='bad': Path(raw).write_text('not JSON'); sys.exit(0)
 if mode=='multi': Path(raw).write_text('{}\\n{}\\n'); sys.exit(0)
+if mode=='deep': Path(raw).write_text('{"nested":'+ '['*2000+'0'+']'*2000+'}'); sys.exit(0)
+if mode.startswith('status:'): Path(raw).write_text(json.dumps({'status':mode[7:]})); sys.exit(0)
 if mode=='error': Path(raw).write_text(json.dumps({'status':'error'})); sys.exit(0)
 row={'status':'retrieval_only' if mode=='retrieval' else 'success'}
 if mode=='critical': row['critical_suspected']=True
@@ -54,6 +56,11 @@ class FixtureBase(unittest.TestCase):
 
 class PreparationTests(FixtureBase):
     def test_draft_exact_snapshots_seed_and_both_stage_counts(self):
+        """Oracle: literal stdlib shuffle of SYN00..07 with seed20261119.
+
+        Established independently of prepare/verify; input-order preservation or
+        another seed must fail even if both project functions share that error.
+        """
         original = (self.cases.read_bytes(), self.gold.read_bytes())
         a, b = self.root / 'a', self.root / 'b'
         m = prepare(self.cases, self.gold, a, artifacts=(self.worker,))
@@ -61,12 +68,67 @@ class PreparationTests(FixtureBase):
         self.assertEqual((a/'cases.json').read_bytes(), original[0])
         self.assertEqual((a/'gold.json').read_bytes(), original[1])
         self.assertEqual((a/'order.json').read_bytes(), (b/'order.json').read_bytes())
-        self.assertEqual(len(set(json.loads((a/'order.json').read_text())['ids'])), 8)
+        order = json.loads((a/'order.json').read_text())['ids']
+        self.assertEqual(order, ['SYN02', 'SYN03', 'SYN00', 'SYN01',
+                                 'SYN06', 'SYN04', 'SYN05', 'SYN07'])
+        self.assertCountEqual(order, [row['id'] for row in self.rows])
+        self.assertEqual(m['seed'], 20261119)
+        self.assertEqual(m['order_algorithm'], 'python.random.Random.shuffle')
+        self.assertEqual(m['schema_version'], 1)
+        self.assertEqual(m['python_version'], sys.version.split()[0])
         self.assertEqual(m['planned_primary_attempts'], 16)
         self.assertFalse(m['freeze_approved'])
         self.assertFalse(m['execution_authorized'])
         self.assertEqual(verify_bundle(a)['files'], m['files'])
         self.assertEqual((self.cases.read_bytes(), self.gold.read_bytes()), original)
+
+    def test_seed_override_is_not_an_api_or_cli_option(self):
+        out = self.root/'out'
+        with self.assertRaises(TypeError):
+            prepare(self.cases, self.gold, out, seed=20261120)
+        result = subprocess.run(
+            [sys.executable, str(CLI), 'prepare', '--cases', str(self.cases),
+             '--gold', str(self.gold), '--output', str(out), '--seed', '20261120'],
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(out.exists())
+
+    def test_malformed_and_deep_json_rejected_at_all_input_boundaries(self):
+        payloads = [b'{"fixture_secret":',
+                    b'{"fixture_secret":' + b'['*2000 + b'0' + b']'*2000 + b'}']
+        for index, payload in enumerate(payloads):
+            for path in (self.cases, self.gold):
+                with self.subTest(index=index, input=path.name):
+                    original = path.read_bytes()
+                    path.write_bytes(payload)
+                    out = self.root/'invalid'
+                    with self.assertRaises(ValueError):
+                        prepare(self.cases, self.gold, out)
+                    result = subprocess.run(
+                        [sys.executable, str(CLI), 'prepare', '--cases', str(self.cases),
+                         '--gold', str(self.gold), '--output', str(out)],
+                        capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertNotIn('fixture_secret', result.stdout + result.stderr)
+                    self.assertNotIn('Traceback', result.stdout + result.stderr)
+                    self.assertFalse(out.exists())
+                    path.write_bytes(original)
+            for name in ('manifest.json', 'cases.json', 'gold.json', 'order.json'):
+                with self.subTest(index=index, snapshot=name):
+                    out = self.root/f'bundle-{index}-{name}'
+                    prepare(self.cases, self.gold, out)
+                    (out/name).write_bytes(payload)
+                    if name != 'manifest.json':
+                        manifest = json.loads((out/'manifest.json').read_text())
+                        manifest['files'][name] = digest(out/name)
+                        (out/'manifest.json').write_text(json.dumps(manifest))
+                    with self.assertRaises(ValueError):
+                        verify_bundle(out)
+                    result = subprocess.run([sys.executable, str(CLI), 'verify', str(out)],
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertNotIn('fixture_secret', result.stdout + result.stderr)
+                    self.assertNotIn('Traceback', result.stdout + result.stderr)
 
     def test_duplicate_case_id_fails_before_output_creation(self):
         self.rows[1]['id'] = self.rows[0]['id']
@@ -122,6 +184,7 @@ class PreparationTests(FixtureBase):
         original = path.read_bytes()
         for key,value in [('execution_authorized',True), ('freeze_approved',True),
                           ('state','FROZEN'), ('case_count',999), ('seed',False),
+                          ('seed',20261120), ('order_algorithm','input_order'),
                           ('stages',['generation','retrieval'])]:
             m = json.loads(original);m[key] = value;path.write_text(json.dumps(m))
             with self.assertRaises(ValueError):
@@ -173,11 +236,26 @@ class SupervisionTests(FixtureBase):
         self.assertIn('synthetic worker started',Path(r['attempts'][0]['stdout']).read_text())
 
     def test_missing_invalid_error_and_multirecord_logs_pause(self):
-        for mode in ['missing','bad','multi','error']:
+        for mode in ['missing','bad','deep','multi','error']:
             with self.subTest(mode=mode):
                 r = supervise_tasks([self.task(mode),self.task(case='SYN01')], self.root/mode, 5)
                 self.assertEqual([a['status'] for a in r['attempts']],
                                  ['invalid_or_missing_log','NOT_RUN'])
+
+    def test_only_prototype_stage_statuses_are_accepted(self):
+        statuses = ['retrieval_only', 'success', 'safety_abstained_pre_generation',
+                    'safety_source_scoped_answer_pre_generation',
+                    'safety_blocked_post_generation', 'safety_rewritten_source_extract']
+        for stage, accepted in [('retrieval', 'retrieval_only'), ('generation', 'success')]:
+            for status in statuses:
+                with self.subTest(stage=stage, status=status):
+                    r = supervise_tasks(
+                        [self.task('status:'+status, stage=stage),
+                         self.task('status:'+accepted, case='SYN01', stage=stage)],
+                        self.root/f'{stage}-{status}', 5, review=lambda _: True)
+                    expected = (['executed', 'executed'] if status == accepted else
+                                ['invalid_or_missing_log', 'NOT_RUN'])
+                    self.assertEqual([a['status'] for a in r['attempts']], expected)
 
     def test_launch_failure_is_attempted_not_silently_missing(self):
         task = Task('SYN00','retrieval',('/nonexistent/synthetic-worker','{raw_log}'))
@@ -211,9 +289,62 @@ class SupervisionTests(FixtureBase):
         def review(_):
             raise KeyboardInterrupt
         with self.assertRaises(KeyboardInterrupt):
-            self.supervise([self.task('success',stage='generation')], review=review)
+            self.supervise([self.task('success',stage='generation'),
+                            self.task('success',case='SYN01',stage='generation')], review=review)
         r = json.loads((self.root/'attempts/attempts.json').read_text())
-        self.assertEqual(r['attempts'][0]['status'], 'interrupted')
+        self.assertEqual([a['status'] for a in r['attempts']], ['interrupted', 'NOT_RUN'])
+        self.assertEqual(r['state'], 'paused')
+        self.assertTrue(r['attempts'][0]['worker_launched'])
+
+    def test_interrupt_across_attempt_lifecycle_persists_and_reraises(self):
+        from tools import b210_instrument as instrument
+        for boundary in ('pre_hash', 'raw_read', 'post_hash', 'ledger_write'):
+            with self.subTest(boundary=boundary):
+                calls = 0
+                target = {'pre_hash': 'digest', 'post_hash': 'digest',
+                          'raw_read': '_read_result', 'ledger_write': '_new_file'}[boundary]
+                real = getattr(instrument, target)
+                def interrupt(*args, **kwargs):
+                    nonlocal calls
+                    calls += 1
+                    result = real(*args, **kwargs)
+                    trigger = 2 if boundary in ('post_hash', 'ledger_write') else 1
+                    if calls == trigger:
+                        raise KeyboardInterrupt
+                    return result
+                out = self.root/boundary
+                fingerprint = digest(self.worker)
+                with patch.object(instrument, target, interrupt):
+                    with patch.object(instrument, '_terminate', wraps=instrument._terminate) as stop:
+                        with self.assertRaises(KeyboardInterrupt):
+                            supervise_tasks([self.task(), self.task(case='SYN01')], out, 5,
+                                            expected_hashes={str(self.worker): fingerprint})
+                report = json.loads((out/'attempts.json').read_text())
+                self.assertEqual(report['state'], 'paused')
+                self.assertEqual([a['status'] for a in report['attempts']],
+                                 ['interrupted', 'NOT_RUN'])
+                launched = boundary in ('raw_read', 'post_hash')
+                row = report['attempts'][0]
+                self.assertEqual(row['worker_launched'], launched)
+                self.assertEqual(stop.call_count, int(launched))
+                self.assertEqual(row['exit_code'], 0 if launched else None)
+                self.assertTrue(row['ended_at'])
+                if launched:
+                    self.assertIn('synthetic worker started', Path(row['stdout']).read_text())
+                self.assertFalse((out/'retrieval--SYN01').exists())
+                self.assertFalse((out/'attempts.tmp').exists())
+
+    def test_artifact_change_during_review_is_detected(self):
+        fingerprint = digest(self.worker)
+        def review(_):
+            self.worker.write_text('changed fixture')
+            return True
+        r = self.supervise([self.task('success', stage='generation'),
+                            self.task('success', case='SYN01', stage='generation')],
+                           expected_hashes={str(self.worker): fingerprint}, review=review)
+        self.assertEqual([a['status'] for a in r['attempts']], ['artifact_changed', 'NOT_RUN'])
+        self.assertEqual(r['attempts'][0]['prior_status'], 'executed')
+        self.assertEqual(r['state'], 'paused')
 
     def test_artifact_change_during_worker_is_detected_after_exit(self):
         watched = self.root/'watched.txt';watched.write_text('original')
