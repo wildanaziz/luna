@@ -25,11 +25,7 @@ from typing import Callable
 
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}\Z')
 STAGES = ('retrieval', 'generation')
-VALID_STATUSES = {
-    'retrieval_only', 'success', 'safety_abstained_pre_generation',
-    'safety_source_scoped_answer_pre_generation', 'safety_blocked_post_generation',
-    'safety_rewritten_source_extract',
-}
+SEED = 20261119
 MAX_JSON = 4 * 1024 * 1024
 
 
@@ -57,7 +53,10 @@ def _new_file(path: Path, data: bytes):
 def _object(data: bytes) -> dict:
     if len(data) > MAX_JSON:
         raise ValueError('JSON exceeds preparation size limit')
-    obj = json.loads(data)
+    try:
+        obj = json.loads(data)
+    except RecursionError:
+        raise ValueError('JSON nesting exceeds parser limit') from None
     if not isinstance(obj, dict):
         raise ValueError('JSON root must be an object')
     return obj
@@ -94,20 +93,18 @@ def _validate(cases: dict, gold: dict) -> list[str]:
     return ids
 
 
-def prepare(cases_path: Path, gold_path: Path, output: Path, seed: int = 20261119,
+def prepare(cases_path: Path, gold_path: Path, output: Path,
             artifacts: tuple[Path, ...] = ()) -> dict:
     """Snapshot unchanged local inputs and a reproducible order; no model imports."""
     cases_data, gold_data = cases_path.read_bytes(), gold_path.read_bytes()
     ids = _validate(_object(cases_data), _object(gold_data))
-    if type(seed) is not int:
-        raise ValueError('seed must be an integer')
     order = list(ids)
-    random.Random(seed).shuffle(order)
+    random.Random(SEED).shuffle(order)
     artifact_rows = [{'path': str(p.resolve()), 'sha256': digest(p)} for p in artifacts]
     manifest = {
         'schema_version': 1, 'state': 'DRAFT_NOT_FROZEN',
         'freeze_approved': False, 'execution_authorized': False,
-        'runtime_preflight': 'NOT_PERFORMED', 'seed': seed,
+        'runtime_preflight': 'NOT_PERFORMED', 'seed': SEED,
         'order_algorithm': 'python.random.Random.shuffle',
         'python_version': platform.python_version(),
         'created_at': datetime.now(timezone.utc).isoformat(),
@@ -152,9 +149,9 @@ def verify_bundle(root: Path) -> dict:
     if not isinstance(order, list) or any(not isinstance(x, str) for x in order):
         raise ValueError('invalid order')
     expected_order = list(ids)
-    if type(m.get('seed')) is not int:
-        raise ValueError('invalid seed')
-    random.Random(m['seed']).shuffle(expected_order)
+    if type(m.get('seed')) is not int or m['seed'] != SEED:
+        raise ValueError('unsupported seed')
+    random.Random(SEED).shuffle(expected_order)
     if (order != expected_order or m.get('order_algorithm') != 'python.random.Random.shuffle'
             or m.get('case_count') != len(ids) or m.get('stages') != list(STAGES)
             or m.get('planned_primary_attempts') != 2 * len(ids)):
@@ -174,8 +171,11 @@ class Task:
 
 def _save(path: Path, value):
     temporary = path.with_suffix('.tmp')
-    _new_file(temporary, _json_bytes(value))
-    os.replace(temporary, path)
+    try:
+        _new_file(temporary, _json_bytes(value))
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _terminate(proc: subprocess.Popen):
@@ -205,8 +205,8 @@ def _read_result(path: Path, stage: str) -> dict:
         raise ValueError('exactly one raw record required per attempt')
     record = _object(lines[0].encode('utf-8'))
     status = record.get('status')
-    allowed = {'retrieval_only'} if stage == 'retrieval' else VALID_STATUSES - {'retrieval_only'}
-    if not isinstance(status, str) or status not in allowed:
+    expected_status = 'retrieval_only' if stage == 'retrieval' else 'success'
+    if status != expected_status:
         raise ValueError('raw status not valid for this stage')
     if 'critical_suspected' in record and type(record['critical_suspected']) is not bool:
         raise ValueError('invalid critical indication')
@@ -256,82 +256,85 @@ def supervise_tasks(tasks: list[Task], output: Path, timeout: float, *,
     ledger = output / 'attempts.json'
     _save(ledger, report)
     for task, row in zip(tasks, report['attempts']):
+        start, proc = time.monotonic(), None
+        row['worker_launched'] = False
         try:
-            for name, expected in (expected_hashes or {}).items():
-                if digest(Path(name)) != expected:
-                    raise ValueError('artifact changed')
-        except (OSError, ValueError):
-            report['state'] = 'paused_artifact_mismatch'
+            try:
+                for name, expected in expected_hashes.items():
+                    if digest(Path(name)) != expected:
+                        raise ValueError('artifact changed')
+            except (OSError, ValueError):
+                report['state'] = 'paused_artifact_mismatch'
+                _save(ledger, report)
+                return report
+            folder = output / f'{task.stage}--{task.case_id}'
+            folder.mkdir(mode=0o700)
+            raw, terminal = folder / 'raw.jsonl', folder / 'stdout.txt'
+            argv = [str(raw.resolve()) if a == '{raw_log}' else a for a in task.argv]
+            row.update(status='STARTING', command=argv, stdout=str(terminal.resolve()),
+                       raw=str(raw.resolve()), started_at=datetime.now(timezone.utc).isoformat(),
+                       timeout_seconds=timeout, exit_code=None)
             _save(ledger, report)
-            return report
-        folder = output / f'{task.stage}--{task.case_id}'
-        folder.mkdir(mode=0o700)
-        raw, terminal = folder / 'raw.jsonl', folder / 'stdout.txt'
-        argv = [str(raw.resolve()) if a == '{raw_log}' else a for a in task.argv]
-        row.update(status='STARTING', command=argv, stdout=str(terminal.resolve()),
-                   raw=str(raw.resolve()), started_at=datetime.now(timezone.utc).isoformat(),
-                   timeout_seconds=timeout, exit_code=None)
-        _save(ledger, report)
-        start, proc, interrupted = time.monotonic(), None, False
-        with terminal.open('xb') as stream:
-            os.chmod(terminal, 0o600)
-            try:
-                proc = subprocess.Popen(argv, stdout=stream, stderr=subprocess.STDOUT,
-                                        stdin=subprocess.DEVNULL, start_new_session=True)
-                row['exit_code'] = proc.wait(timeout=timeout)
-                row['status'] = 'executed' if proc.returncode == 0 else 'failed'
-            except subprocess.TimeoutExpired:
-                _terminate(proc)
-                row.update(status='timeout', exit_code=proc.returncode)
-            except KeyboardInterrupt:
-                if proc is not None:
+            with terminal.open('xb') as stream:
+                os.chmod(terminal, 0o600)
+                try:
+                    proc = subprocess.Popen(argv, stdout=stream, stderr=subprocess.STDOUT,
+                                            stdin=subprocess.DEVNULL, start_new_session=True)
+                    row['worker_launched'] = True
+                    row['exit_code'] = proc.wait(timeout=timeout)
+                    row['status'] = 'executed' if proc.returncode == 0 else 'failed'
+                except subprocess.TimeoutExpired:
                     _terminate(proc)
-                row.update(status='interrupted', exit_code=proc.returncode if proc else None)
-                interrupted = True
-            except OSError as exc:
-                row.update(status='launch_error', error_type=type(exc).__name__)
-            finally:
-                stream.flush()
-                os.fsync(stream.fileno())
-        row.update(ended_at=datetime.now(timezone.utc).isoformat(),
-                   duration_seconds=time.monotonic() - start)
-        if row['status'] == 'executed':
+                    row.update(status='timeout', exit_code=proc.returncode)
+                except OSError as exc:
+                    row.update(status='launch_error', error_type=type(exc).__name__)
+                finally:
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            row.update(ended_at=datetime.now(timezone.utc).isoformat(),
+                       duration_seconds=time.monotonic() - start)
+            if row['status'] == 'executed':
+                try:
+                    record = _read_result(raw, task.stage)
+                except (ValueError, OSError, UnicodeError):
+                    row['status'] = 'invalid_or_missing_log'
+                else:
+                    row['raw_status'] = record['status']
+                    if record.get('critical_suspected'):
+                        row['status'] = 'critical_suspected'
+                    elif task.stage == 'generation':
+                        row['status'] = 'review_required'
+                        try:
+                            if review is not None and review(record) is True:
+                                row['status'] = 'executed'
+                        except Exception as exc:
+                            row.update(status='review_error', error_type=type(exc).__name__)
+            row['artifact_check'] = 'matched' if expected_hashes else 'not_requested'
             try:
-                record = _read_result(raw, task.stage)
-            except (ValueError, OSError, UnicodeError):
-                row['status'] = 'invalid_or_missing_log'
-            else:
-                row['raw_status'] = record['status']
-                if record.get('critical_suspected'):
-                    row['status'] = 'critical_suspected'
-                elif task.stage == 'generation':
-                    row['status'] = 'review_required'
-                    try:
-                        if review is not None and review(record) is True:
-                            row['status'] = 'executed'
-                    except KeyboardInterrupt:
-                        row['status'] = 'interrupted'
-                        interrupted = True
-                    except Exception as exc:
-                        row.update(status='review_error', error_type=type(exc).__name__)
-        row['artifact_check'] = 'matched' if expected_hashes else 'not_requested'
-        try:
-            for name, expected in expected_hashes.items():
-                if digest(Path(name)) != expected:
-                    raise ValueError('artifact changed during worker or review')
-        except (OSError, ValueError):
-            row['artifact_check'] = 'mismatch'
-            row['prior_status'] = row['status']
-            row['status'] = 'artifact_changed'
-        if row['status'] != 'executed':
+                for name, expected in expected_hashes.items():
+                    if digest(Path(name)) != expected:
+                        raise ValueError('artifact changed during worker or review')
+            except (OSError, ValueError):
+                row['artifact_check'] = 'mismatch'
+                row['prior_status'] = row['status']
+                row['status'] = 'artifact_changed'
+            if row['status'] != 'executed':
+                report['state'] = 'paused'
+            elif row is report['attempts'][-1]:
+                report['state'] = 'completed_execution_not_quality_pass'
+            _save(ledger, report)
+            if report['state'] == 'paused':
+                return report
+        except KeyboardInterrupt:
+            if proc is not None:
+                _terminate(proc)
+            row.update(status='interrupted', worker_launched=proc is not None,
+                       exit_code=proc.returncode if proc is not None else None,
+                       ended_at=datetime.now(timezone.utc).isoformat(),
+                       duration_seconds=time.monotonic() - start)
             report['state'] = 'paused'
-        _save(ledger, report)
-        if interrupted:
-            raise KeyboardInterrupt
-        if report['state'] == 'paused':
-            return report
-    report['state'] = 'completed_execution_not_quality_pass'
-    _save(ledger, report)
+            _save(ledger, report)
+            raise
     return report
 
 
@@ -342,14 +345,13 @@ def main() -> int:
     prep.add_argument('--cases', type=Path, required=True)
     prep.add_argument('--gold', type=Path, required=True)
     prep.add_argument('--output', type=Path, required=True)
-    prep.add_argument('--seed', type=int, default=20261119)
     prep.add_argument('--artifact', type=Path, action='append', default=[])
     check = commands.add_parser('verify', help='check draft snapshots, not run readiness')
     check.add_argument('bundle', type=Path)
     args = parser.parse_args()
     try:
         if args.action == 'prepare':
-            m = prepare(args.cases, args.gold, args.output, args.seed, tuple(args.artifact))
+            m = prepare(args.cases, args.gold, args.output, artifacts=tuple(args.artifact))
         else:
             m = verify_bundle(args.bundle)
     except (OSError, ValueError, KeyError, TypeError):

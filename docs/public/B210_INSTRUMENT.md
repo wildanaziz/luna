@@ -13,7 +13,7 @@ output directory whose parent already exists:
 ```sh
 python3 tools/b210_instrument.py prepare \
   --cases /private/path/cases.json --gold /private/path/gold.json \
-  --output /private/path/new-draft --seed 20261119
+  --output /private/path/new-draft
 python3 tools/b210_instrument.py verify /private/path/new-draft
 ```
 
@@ -24,10 +24,12 @@ match labels. These are structural checks, not a scientific or medical gold
 review. No target number or clinical strata are inferred from generic fixtures.
 
 The draft snapshots the original input bytes unchanged and stores the actual
-shuffled ID list, seed, `python.random.Random.shuffle` algorithm, Python version,
-SHA-256 fingerprints, and the planned count of two primary attempts per case.
-Use the same saved order for retrieval first and generation second. The seed
-alone is not a cross-version ordering guarantee; archive the list and version.
+shuffled ID list, fixed seed `20261119`, `python.random.Random.shuffle` algorithm,
+Python version, SHA-256 fingerprints, and the planned count of two primary
+attempts per case.
+Use the same saved order for retrieval first and generation second. Alternate
+seeds are not supported by the API, CLI or bundle verifier. The seed alone is not
+a cross-version ordering guarantee; archive the list and version.
 This ordering does not make cases independent or control a performance comparison.
 
 An optional repeated `--artifact /path/to/file` records local file hashes. Do not
@@ -58,7 +60,10 @@ an atomic ledger containing all planned entries, initially `NOT_RUN`. It streams
 combined stdout/stderr directly to disk, records command/timestamps/exit/status,
 and pauses on launch/nonzero exit/timeout/interruption/invalid or missing raw
 JSONL. It does not retry, restart shared services, overwrite outputs or silently
-replace a primary attempt. A killed supervisor can leave `STARTING` in its ledger;
+replace a primary attempt. Interruption across prelaunch checks, worker waiting,
+log reading, review and final integrity checks records a paused/interrupted ledger
+before re-raising; `worker_launched` distinguishes an unlaunched attempt from an
+executed worker. A killed supervisor can leave `STARTING` in its ledger;
 that is incomplete evidence, not success or a reason to exclude the attempt.
 
 Timeout/interrupt cleanup targets the worker's own POSIX session/process group,
@@ -67,9 +72,9 @@ SHA-256 values is recorded and checked before/after an attempt; a mismatch pause
 This is not continuous monitoring or remote process/model attestation. Process
 elapsed timestamps are diagnostic, not decoding throughput, TTFT or GPU telemetry.
 
-Exactly one JSON object with a recognized stage-appropriate status is required
-in each raw log. Recognition of existing RAG status names is only a structural
-contract: the RAG application has not been run to validate live integration.
+Exactly one JSON object is required in each raw log. Only `retrieval_only` for
+retrieval and `success` for generation are accepted. These are synthetic prototype
+contracts, not claims of compatibility with live RAG or safety-status mappings.
 A worker's `critical_suspected: true` pauses; no clinical detector is implemented.
 Generation pauses for review by default. A supplied review callback may explicitly
 return `True` to continue, but this is a trusted integration hook, not a clinical
