@@ -7,13 +7,13 @@ health professionals.
 
 ## Current public scope
 
-This first PR bootstraps version control and a quality gate. It publishes only
-release-policy tooling, offline tests, CI, and public workflow documentation.
-The RAG application and research experiments are **not** shipped or evaluated by
-this bootstrap. See the [public boundary](docs/public/GITHUB_WORKFLOW.md#public-boundary)
+The public tree contains release-policy tooling, offline tests, CI, public
+workflow documentation, and [draft preparation/subprocess instrumentation](docs/public/B210_INSTRUMENT.md).
+The instrumentation is tested with synthetic workers, not the medical application.
+The RAG application and research experiments are **not** shipped or evaluated here. See the [public boundary](docs/public/GITHUB_WORKFLOW.md#public-boundary)
 for withheld materials and future release requirements.
 
-Run the bootstrap checks from the repository root:
+Run the public tooling checks from the repository root:
 
 ```sh
 python3 -m unittest discover -s tests/public -p 'test_*.py' -v
@@ -22,7 +22,7 @@ python3 tools/check_public_tree.py
 
 Python 3.10+ and Git are sufficient. No model, GPU, network service, or third-party
 Python dependency is needed for these checks. A pass demonstrates this public
-publication contract, **not** model quality, clinical safety, or milestone
+publication and offline fixture behavior, **not** model quality, clinical safety, or milestone
 experiment completion.
 
 ## Delivery workflow

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the bootstrap's deliberately small public Git-index contract.
+"""Validate the deliberately small public tooling Git-index contract.
 
 This is an allowlist/credential-format check, not a complete security scanner.
 Only Git-tracked files are read; private ignored workspace data is not inspected.
@@ -18,6 +18,8 @@ ALLOWED_PATHS = frozenset({
     '.gitignore', '.gitattributes', '.no-mistakes.yaml', 'README.md', 'LICENSE',
     '.github/workflows/quality.yml', 'docs/public/GITHUB_WORKFLOW.md',
     'tools/check_public_tree.py', 'tests/public/test_public_tree.py',
+    'tools/b210_instrument.py', 'tests/public/test_b210_instrument.py',
+    'docs/public/B210_INSTRUMENT.md',
 })
 MAX_FILE_BYTES = 256 * 1024
 CREDENTIAL_PATTERNS = (
@@ -126,8 +128,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f'REJECT {problem.code}: {problem.path}', file=sys.stderr)
     if problems:
         return 1
-    print(f'PASS: {len(paths)} tracked files satisfy the bootstrap publication contract')
-    print('Scope: public bootstrap only; not exhaustive secret scanning or RAG validation')
+    print(f'PASS: {len(paths)} tracked files satisfy the public tooling publication contract')
+    print('Scope: public tooling/fixtures only; not exhaustive secret scanning or RAG validation')
     return 0
 
 

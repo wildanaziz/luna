@@ -3,7 +3,10 @@
 ## Public boundary
 
 The public repository is opt-in, not a backup of an entire research machine.
-The bootstrap's executable allowlist is in `tools/check_public_tree.py`.
+The executable allowlist is in `tools/check_public_tree.py`. The M02 tooling
+extension adds exactly three approved paths: the draft instrumentation module,
+its synthetic test module, and its public guide. It does not release real cases,
+gold, raw logs or application source; see [the instrument guide](B210_INSTRUMENT.md).
 `.gitignore` prevents ordinary accidental staging. The checker inspects staged
 modes and blobs as well as the corresponding tracked worktree files; sanitizing
 a worktree file without restaging it does not sanitize the index. It rejects
@@ -94,16 +97,19 @@ already-committed change; inspect the resulting diff and rerun checks.
 In no-mistakes v1.106.1, commands, agent selection, protected paths and several
 other controls are trusted from the fetched default branch. This PR cannot make
 its own controls trusted simply by adding `.no-mistakes.yaml` on a feature branch.
-The existing main has no such file. For the bootstrap's shipped scope, see
-[README](../../README.md#current-public-scope). Use operator-owned local safety
-settings and additive checks for the first gate. The trusted repository policy
-becomes available only after a human merges the bootstrap.
+At bootstrap entry main had no such file. The bootstrap has since been merged;
+subsequent gates use the policy from fetched main. For the current shipped scope,
+see [README](../../README.md#current-public-scope). Operator-owned local safety
+settings and additive checks supplemented the first gate; the feature branch
+could not make its own policy trusted before that merge.
 
 The committed workflow runs stdlib unit and CLI tests, then checks the tracked
 publication surface. It intentionally does not discover all historical test
 scripts: importing a remote inference script can perform network requests.
 Application offline regression coverage is a separate subsequent milestone task.
-Never describe these bootstrap checks as RAG, GPU, inference, or clinical tests.
+The approved instrumentation extension also exercises synthetic subprocess
+success/failure/timeout and draft integrity offline. Never describe these
+checks as RAG, GPU, inference, or clinical tests.
 
 ## Main protection and human merge
 

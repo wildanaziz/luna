@@ -1,6 +1,6 @@
 """Behavioral tests of the user-approved public-release contract, not RAG.
 
-Oracle: only the named bootstrap files may be published; withheld research,
+Oracle: only the named tooling files may be published; withheld research,
 credentials, links, oversized files and uninspectable Git state must fail closed.
 Temporary Git repos exercise the real index/ignore consumer and CLI, offline.
 """
@@ -35,6 +35,16 @@ class PublicationContractTests(unittest.TestCase):
     def test_named_public_document_is_accepted(self):
         self.put('README.md')
         self.assertEqual(self.codes(['README.md']), [])
+
+    def test_exact_authorized_instrument_paths_are_accepted(self):
+        for name in ['tools/b210_instrument.py', 'tests/public/test_b210_instrument.py',
+                     'docs/public/B210_INSTRUMENT.md']:
+            with self.subTest(name=name):
+                self.put(name)
+                self.assertEqual(self.codes([name]), [])
+                self.put(name + '.raw.jsonl')
+                self.assertEqual(self.codes([name + '.raw.jsonl']),
+                                 [(name + '.raw.jsonl', 'not-allowlisted')])
 
     def test_withheld_research_and_runtime_paths_are_rejected(self):
         for name in ['docs/skripsi_research_ops/datasets/withheld/gold.json',

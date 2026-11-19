@@ -17,16 +17,19 @@
 !/docs/public/
 /docs/public/*
 !/docs/public/GITHUB_WORKFLOW.md
+!/docs/public/B210_INSTRUMENT.md
 
 !/tools/
 /tools/*
 !/tools/check_public_tree.py
+!/tools/b210_instrument.py
 
 !/tests/
 /tests/*
 !/tests/public/
 /tests/public/*
 !/tests/public/test_public_tree.py
+!/tests/public/test_b210_instrument.py
 
 # Defense in depth; no tracked files are removed by these rules.
 **/__pycache__/
