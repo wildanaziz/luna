@@ -4,10 +4,14 @@
 
 The public repository is opt-in, not a backup of an entire research machine.
 The bootstrap's executable allowlist is in `tools/check_public_tree.py`.
-`.gitignore` prevents ordinary accidental staging, and the checker rejects
-force-added files outside that allowlist, symlinks, oversized files, and selected
-high-confidence credential formats. These controls reduce risk; they are not a
-complete secret scanner, filesystem sandbox, or proof of permission to publish.
+`.gitignore` prevents ordinary accidental staging. The checker inspects staged
+modes and blobs as well as the corresponding tracked worktree files; sanitizing
+a worktree file without restaging it does not sanitize the index. It rejects
+files outside the allowlist, symlinks, oversized files, and selected
+high-confidence credential formats, and fails closed on uninspectable state or
+an empty index. It does not scan untracked or ignored files or commit history.
+These controls reduce risk; they are not a complete secret scanner, filesystem
+sandbox, or proof of permission to publish.
 The PR diff and new reachable history must still be inspected before publication.
 
 Original evaluation inputs, gold answers, reviews, research documentation, raw
@@ -19,7 +23,8 @@ local withheld edits are not falsely described as GitHub-versioned.
 
 ## Branches and commits
 
-- Preserve the pre-existing `main` history and LICENSE.
+- Preserve the pre-existing `main` history and LICENSE. Do not push directly to
+  `main`; deliver through a gated PR and leave merging to the owner.
 - Bootstrap: `chore/bootstrap-quality-gate`.
 - Research work: `milestone/m02-b210`, `milestone/m03-robustness`, and corresponding
   milestone branches as work begins; do not create empty branches for all stages.
@@ -81,8 +86,8 @@ already-committed change; inspect the resulting diff and rerun checks.
 In no-mistakes v1.106.1, commands, agent selection, protected paths and several
 other controls are trusted from the fetched default branch. This PR cannot make
 its own controls trusted simply by adding `.no-mistakes.yaml` on a feature branch.
-The existing main has no such file. The bootstrap therefore contains governance
-only, no application source or withheld data. Use operator-owned local safety
+The existing main has no such file. For the bootstrap's shipped scope, see
+[README](../../README.md#current-public-scope). Use operator-owned local safety
 settings and additive checks for the first gate. The trusted repository policy
 becomes available only after a human merges the bootstrap.
 

@@ -10,9 +10,8 @@ health professionals.
 This first PR bootstraps version control and a quality gate. It publishes only
 release-policy tooling, offline tests, CI, and public workflow documentation.
 The RAG application and research experiments are **not** shipped or evaluated by
-this bootstrap. Withheld evaluation questions, gold answers, reviews, original
-research documents, operator evidence, models, dependencies, vendor snapshots,
-and runtime artifacts remain outside this public history.
+this bootstrap. See the [public boundary](docs/public/GITHUB_WORKFLOW.md#public-boundary)
+for withheld materials and future release requirements.
 
 Run the bootstrap checks from the repository root:
 
@@ -28,11 +27,7 @@ experiment completion.
 
 ## Delivery workflow
 
-Use milestone branches, meaningful commits, a `no-mistakes` gate, GitHub checks,
-and a manually reviewed pull request. Start with the dedicated
-`chore/bootstrap-quality-gate` branch; later work uses branches such as
-`milestone/m02-b210`. Do not push directly to `main` or auto-merge.
-
-See [GitHub workflow and bootstrap limitations](docs/public/GITHUB_WORKFLOW.md).
+Follow the [GitHub workflow and bootstrap limitations](docs/public/GITHUB_WORKFLOW.md)
+for milestone branches, commits, gated delivery, and the owner's manual merge.
 The existing [LICENSE](LICENSE) is retained unchanged; it does not grant rights
 to third-party or withheld research materials.
