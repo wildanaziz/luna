@@ -48,6 +48,25 @@ This checkout uses the isolated operator-owned root
 later pushes/AXI commands so they use the same gate state. The standard
 `~/.no-mistakes/config.yaml` is not changed. Do not use both entry points to start duplicate runs.
 
+For this Linux checkout, Git 2.34.1 failed before pipeline creation because it
+lacks the `symbolic-ref --no-recurse` option used by no-mistakes v1.106.1. The
+operator authorized user-local Git 2.56.1, verified against the official
+kernel.org SHA-256 manifest and built without changing system Git. A release
+signing-key verification was not performed; do not describe the checksum check
+as a verified GPG signature. The source archive SHA-256 is
+`f0b0bf89264b9bd2e1c640363e7529643989da76281600473c50745cd34a607f`.
+Use the gate-specific environment before initializing or restarting its daemon:
+
+```sh
+export NM_HOME="$HOME/.no-mistakes-luna"
+export PATH="$HOME/.local/opt/git-no-mistakes/2.56.1/bin:$PATH"
+git --version
+```
+
+The standard `/usr/bin/git` and research environments remain unchanged. This is
+a tested compatible version, not a claim about the oldest supported Git version.
+Restart only the isolated gate daemon after changing its toolchain environment.
+
 The gate performs review, test, documentation, lint, delivery and CI observation;
 it is not merely a test runner and can generate changes. Disable transcript
 inference and automatic evidence/media publication. Do not skip or approve over
