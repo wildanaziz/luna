@@ -101,8 +101,6 @@ failure, invalid/missing raw output, timeout with partial stdout, interruption,
 artifact changes and conservative review/critical pauses. They never use withheld
 case text or original-checkout application imports as missing test material.
 
-The exact added public paths are `tools/b210_instrument.py`,
-`tests/public/test_b210_instrument.py`, and this guide. Existing privacy checks
-remain. Real cases, gold, draft bundles, runtime logs, research documents and
-review records stay private/ignored and are not published with this code.
-See [delivery and public scope](GITHUB_WORKFLOW.md).
+The executable publication allowlist is in `tools/check_public_tree.py`.
+Draft bundles and supervision outputs stay private/ignored; they are not published
+with this code. See [the public boundary and delivery policy](GITHUB_WORKFLOW.md#public-boundary).

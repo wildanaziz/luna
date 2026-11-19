@@ -3,10 +3,8 @@
 ## Public boundary
 
 The public repository is opt-in, not a backup of an entire research machine.
-The executable allowlist is in `tools/check_public_tree.py`. The M02 tooling
-extension adds exactly three approved paths: the draft instrumentation module,
-its synthetic test module, and its public guide. It does not release real cases,
-gold, raw logs or application source; see [the instrument guide](B210_INSTRUMENT.md).
+The executable allowlist is in `tools/check_public_tree.py`; see
+[README](../../README.md#current-public-scope) for the current shipped scope.
 `.gitignore` prevents ordinary accidental staging. The checker inspects staged
 modes and blobs as well as the corresponding tracked worktree files; sanitizing
 a worktree file without restaging it does not sanitize the index. It rejects
@@ -95,8 +93,8 @@ already-committed change; inspect the resulting diff and rerun checks.
 ## One-time bootstrap trust boundary
 
 In no-mistakes v1.106.1, commands, agent selection, protected paths and several
-other controls are trusted from the fetched default branch. This PR cannot make
-its own controls trusted simply by adding `.no-mistakes.yaml` on a feature branch.
+other controls are trusted from the fetched default branch. A feature branch cannot
+make its own controls trusted simply by adding `.no-mistakes.yaml`.
 At bootstrap entry main had no such file. The bootstrap has since been merged;
 subsequent gates use the policy from fetched main. For the current shipped scope,
 see [README](../../README.md#current-public-scope). Operator-owned local safety
@@ -107,9 +105,8 @@ The committed workflow runs stdlib unit and CLI tests, then checks the tracked
 publication surface. It intentionally does not discover all historical test
 scripts: importing a remote inference script can perform network requests.
 Application offline regression coverage is a separate subsequent milestone task.
-The approved instrumentation extension also exercises synthetic subprocess
-success/failure/timeout and draft integrity offline. Never describe these
-checks as RAG, GPU, inference, or clinical tests.
+For instrumentation coverage, see [the instrument guide](B210_INSTRUMENT.md#offline-tests-and-publication-boundary).
+Never describe these checks as RAG, GPU, inference, or clinical tests.
 
 ## Main protection and human merge
 
