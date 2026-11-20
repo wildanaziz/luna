@@ -19,7 +19,8 @@ ALLOWED_PATHS = frozenset({
     '.github/workflows/quality.yml', 'docs/public/GITHUB_WORKFLOW.md',
     'tools/check_public_tree.py', 'tests/public/test_public_tree.py',
     'tools/b210_instrument.py', 'tests/public/test_b210_instrument.py',
-    'docs/public/B210_INSTRUMENT.md',
+    'docs/public/B210_INSTRUMENT.md', 'docs/public/B210_LIVE.md',
+    'tools/b210_live.py', 'tests/public/test_b210_live.py',
 })
 MAX_FILE_BYTES = 256 * 1024
 CREDENTIAL_PATTERNS = (
