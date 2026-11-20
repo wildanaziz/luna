@@ -8,8 +8,9 @@ health professionals.
 ## Current public scope
 
 The public tree contains release-policy tooling, offline tests, CI, public
-workflow documentation, and [draft preparation/subprocess instrumentation](docs/public/B210_INSTRUMENT.md).
-The instrumentation is tested with synthetic workers, not the medical application.
+workflow documentation, [draft preparation/subprocess instrumentation](docs/public/B210_INSTRUMENT.md),
+and a [research-only V06-fix adapter](docs/public/B210_INSTRUMENT.md#v06-fix-research-adapter).
+The instrumentation and adapter are tested with synthetic workers, not the medical application.
 The RAG application and research experiments are **not** shipped or evaluated here. See the [public boundary](docs/public/GITHUB_WORKFLOW.md#public-boundary)
 for withheld materials and future release requirements.
 

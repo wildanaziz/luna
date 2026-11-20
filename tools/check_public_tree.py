@@ -20,6 +20,7 @@ ALLOWED_PATHS = frozenset({
     'tools/check_public_tree.py', 'tests/public/test_public_tree.py',
     'tools/b210_instrument.py', 'tests/public/test_b210_instrument.py',
     'docs/public/B210_INSTRUMENT.md',
+    'tools/b210_live.py', 'tests/public/test_b210_live.py',
 })
 MAX_FILE_BYTES = 256 * 1024
 CREDENTIAL_PATTERNS = (

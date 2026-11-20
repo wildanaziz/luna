@@ -23,6 +23,7 @@
 /tools/*
 !/tools/check_public_tree.py
 !/tools/b210_instrument.py
+!/tools/b210_live.py
 
 !/tests/
 /tests/*
@@ -30,6 +31,7 @@
 /tests/public/*
 !/tests/public/test_public_tree.py
 !/tests/public/test_b210_instrument.py
+!/tests/public/test_b210_live.py
 
 # Defense in depth; no tracked files are removed by these rules.
 **/__pycache__/
