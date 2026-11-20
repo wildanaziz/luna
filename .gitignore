@@ -18,7 +18,6 @@
 /docs/public/*
 !/docs/public/GITHUB_WORKFLOW.md
 !/docs/public/B210_INSTRUMENT.md
-!/docs/public/B210_LIVE.md
 
 !/tools/
 /tools/*
