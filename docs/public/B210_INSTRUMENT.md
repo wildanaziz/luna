@@ -82,11 +82,53 @@ approval or automatic gold scorer. Callback failures pause; user interruption is
 recorded. Synthetic callback approval in tests must not be described as medical
 review. A technically successful answer can still fail every quality criterion.
 
-A later authorized live adapter must connect the saved order/configuration,
-actual RAG arguments/IDs/raw metadata, human review, preflight-derived timeout,
-freeze/sign-off, execution permission, resume provenance and diagnostic retry
-policy. This release intentionally does not provide a live/resume/retry command.
-Do not claim all M02 run-readiness work is closed from these fixtures alone.
+For the separate V06-fix integration, see the [research adapter](#v06-fix-research-adapter).
+The fixture API above retains its original status and boolean callback contract.
+
+## V06-fix research adapter
+
+`tools/b210_live.py` is a POSIX library for a separately authorized research
+operator, not a live CLI or permission to execute research. It is not for patient
+care or clinical use. Public tests exercise synthetic workers only, without
+network calls; they do not establish compatibility with the unchanged real worker.
+
+The adapter invokes V06-fix directly rather than using the older batch runner.
+It verifies the draft and uses its saved order for retrieval first, then generation.
+The draft must pin the worker source and all required index artifacts. The draft,
+its snapshots and pinned artifacts are hash-checked before and after attempts.
+Only the question is passed from case/gold inputs to the worker; gold is read
+locally by the draft verifier. The fixed invocation and expected raw profile are
+owned by `tools/b210_live.py`, not by the generic fixture supervisor.
+
+Each attempt has a separate directory with unchanged raw JSONL and combined
+stdout/stderr, plus an entry in `attempts.json`. The ledger separates exit status,
+original worker status, observed display behavior and unassessed research quality.
+An abstention can be technically completed without being a quality pass. Worker
+failures, timeout, invalid/missing records or identity/profile mismatches, artifact
+drift and pending review stop progression. `stop_ordinal` identifies the stopped
+attempt; later rows remain `NOT_RUN`.
+
+For generation, the adapter persists `review_required` before handing the raw path
+and row identity to the supplied reviewer callback. An identified human's structured
+`Review` with `CONTINUE` and a rationale can advance the same process. `PAUSE`,
+`UNRESOLVED`, absent review and invalid replies stop it. The callback is trusted
+integration code, not an automated or clinical reviewer, and the adapter cannot
+authenticate the human behind it. Never wire unconditional approval for actual
+research output. Raw and input hashes are checked again after review.
+
+A `Receipt` records externally granted preflight, freeze and execution references;
+filling its fields does not create permission or change the bundle's draft state.
+The caller must verify those records, the runtime session and approved execution
+window. The explicit outer timeout must come from preflight evidence, not a fixture.
+The endpoint is restricted to explicit IPv4 loopback HTTP, but Hugging Face offline
+flags are not a network sandbox. A local subprocess timeout does not prove remote
+inference has stopped. Do not retry or restart based on timeout alone.
+
+There is no automatic retry, restart or cross-process resume. Existing output
+directories are refused. Preserve the stopped ledger for an operator's subsequent
+decision; do not restart the full primary batch in a fresh directory as a substitute
+for resuming or replace a primary with diagnostic output. Do not claim all M02
+run-readiness work is closed from these fixtures alone.
 
 ## Offline tests and publication boundary
 
@@ -98,8 +140,10 @@ python3 tools/check_public_tree.py
 Tests exercise draft mapping, exact snapshots, repeatable ordering, tampering,
 overwrite refusal, CLI behavior and real synthetic subprocess success, launch
 failure, invalid/missing raw output, timeout with partial stdout, interruption,
-artifact changes and conservative review/critical pauses. They never use withheld
-case text or original-checkout application imports as missing test material.
+artifact changes and conservative review/critical pauses. Adapter tests additionally
+exercise saved ordering, raw provenance, observed display classifications, structured
+review and identity/profile rejection. They never use withheld case text or
+original-checkout application imports as missing test material.
 
 The executable publication allowlist is in `tools/check_public_tree.py`.
 Draft bundles and supervision outputs stay private/ignored; they are not published

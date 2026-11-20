@@ -2,8 +2,8 @@
 """Local preparation and subprocess supervision; not a medical evaluator.
 
 The CLI only prepares/verifies a DRAFT bundle. It cannot freeze or execute it.
-The supervision API is exercised with synthetic workers; a live-run adapter,
-preflight, freeze and explicit runtime permission remain separate work.
+The supervision API is exercised with synthetic workers. The separate b210_live
+adapter does not grant preflight, freeze or explicit runtime permission.
 """
 from __future__ import annotations
 
